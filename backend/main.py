@@ -32,6 +32,7 @@ def receive_sensor_reading(data: SensorReading):
 
     db = Session(engine)
 
+    # Save sensor reading
     reading = SensorReadingModel(
         device_id=data.device_id,
         ingredient=data.ingredient,
@@ -39,18 +40,30 @@ def receive_sensor_reading(data: SensorReading):
     )
 
     db.add(reading)
+
+    # Update inventory stock using latest sensor weight
+    inventory_item = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.ingredient == data.ingredient)
+        .first()
+    )
+
+    if inventory_item:
+        inventory_item.current_stock = data.weight
+
     db.commit()
     db.refresh(reading)
     db.close()
 
     return {
         "success": True,
-        "message": "Sensor data saved successfully",
+        "message": "Sensor data saved and inventory updated successfully",
         "data": {
-            "id": reading.id,
+            "reading_id": reading.id,
             "device_id": reading.device_id,
             "ingredient": reading.ingredient,
-            "weight": reading.weight
+            "weight": reading.weight,
+            "inventory_updated": inventory_item is not None
         }
     }
 
