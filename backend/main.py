@@ -1,3 +1,4 @@
+import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -18,6 +19,19 @@ class InventoryItemCreate(BaseModel):
     current_stock: float
     minimum_stock: float
     unit: str = "kg"
+
+
+class MLPredictionRequest(BaseModel):
+    ingredient: str
+    students_present: int
+    meals_served: int
+    previous_day_consumption: float
+    rolling_7_day_consumption: float
+    day_of_week_num: int
+    month_num: int
+    holiday: int
+    current_stock: float
+    received_quantity: float
 
 
 @app.get("/")
@@ -291,4 +305,36 @@ def get_sensor_readings():
             }
             for reading in readings
         ]
+    }
+
+# ML demand prediction
+@app.post("/api/ml/predict")
+def predict_demand(data: MLPredictionRequest):
+
+    ml_url = "http://172.18.32.110:8001/predict"
+
+    payload = {
+        "ingredient": data.ingredient,
+        "students_present": data.students_present,
+        "meals_served": data.meals_served,
+        "previous_day_consumption": data.previous_day_consumption,
+        "rolling_7_day_consumption": data.rolling_7_day_consumption,
+        "day_of_week_num": data.day_of_week_num,
+        "month_num": data.month_num,
+        "holiday": data.holiday,
+        "current_stock": data.current_stock,
+        "received_quantity": data.received_quantity
+    }
+
+    response = requests.post(
+        ml_url,
+        json=payload,
+        timeout=10
+    )
+
+    response.raise_for_status()
+
+    return {
+        "success": True,
+        "data": response.json()
     }
