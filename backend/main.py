@@ -210,3 +210,55 @@ def get_low_stock_items():
             for item in items
         ]
     }
+
+
+# Dashboard summary
+@app.get("/api/dashboard/summary")
+def get_dashboard_summary():
+
+    db = Session(engine)
+
+    # Get all inventory items
+    inventory_items = db.query(InventoryItem).all()
+
+    # Count low-stock items
+    low_stock_count = (
+        db.query(InventoryItem)
+        .filter(
+            InventoryItem.current_stock <= InventoryItem.minimum_stock
+        )
+        .count()
+    )
+
+    # Get latest sensor reading
+    latest_reading = (
+        db.query(SensorReadingModel)
+        .order_by(SensorReadingModel.id.desc())
+        .first()
+    )
+
+    db.close()
+
+    # Calculate total stock
+    total_stock = sum(
+        item.current_stock for item in inventory_items
+    )
+
+    return {
+        "success": True,
+        "data": {
+            "total_inventory_items": len(inventory_items),
+            "low_stock_items": low_stock_count,
+            "total_stock": total_stock,
+            "latest_sensor_reading": (
+                {
+                    "device_id": latest_reading.device_id,
+                    "ingredient": latest_reading.ingredient,
+                    "weight": latest_reading.weight,
+                    "created_at": latest_reading.created_at
+                }
+                if latest_reading
+                else None
+            )
+        }
+    }
