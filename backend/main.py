@@ -180,3 +180,33 @@ def update_inventory(item_id: int, data: InventoryItemCreate):
             "unit": item.unit
         }
     }
+
+# Get low-stock inventory items
+@app.get("/api/inventory/low-stock")
+def get_low_stock_items():
+
+    db = Session(engine)
+
+    items = (
+        db.query(InventoryItem)
+        .filter(InventoryItem.current_stock <= InventoryItem.minimum_stock)
+        .all()
+    )
+
+    db.close()
+
+    return {
+        "success": True,
+        "count": len(items),
+        "data": [
+            {
+                "id": item.id,
+                "ingredient": item.ingredient,
+                "current_stock": item.current_stock,
+                "minimum_stock": item.minimum_stock,
+                "unit": item.unit,
+                "status": "LOW_STOCK"
+            }
+            for item in items
+        ]
+    }
