@@ -262,3 +262,33 @@ def get_dashboard_summary():
             )
         }
     }
+
+
+# Get sensor reading history
+@app.get("/api/sensors/readings")
+def get_sensor_readings():
+
+    db = Session(engine)
+
+    readings = (
+        db.query(SensorReadingModel)
+        .order_by(SensorReadingModel.id.desc())
+        .all()
+    )
+
+    db.close()
+
+    return {
+        "success": True,
+        "count": len(readings),
+        "data": [
+            {
+                "id": reading.id,
+                "device_id": reading.device_id,
+                "ingredient": reading.ingredient,
+                "weight": reading.weight,
+                "created_at": reading.created_at
+            }
+            for reading in readings
+        ]
+    }
