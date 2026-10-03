@@ -1,5 +1,6 @@
 #include "HX711.h"
 #include <WiFi.h>
+#include <HTTPClient.h>
 
 // ========================================
 // HX711 CONFIGURATION
@@ -11,7 +12,7 @@
 HX711 scale;
 
 // IMPORTANT:
-// Yahan apna ACTUAL calibration factor daalo.
+// Apna ACTUAL calibration factor yahan daalo.
 float CALIBRATION_FACTOR = -2280.0;
 
 
@@ -21,6 +22,17 @@ float CALIBRATION_FACTOR = -2280.0;
 
 const char* ssid = "YOUR_WIFI_NAME";
 const char* password = "YOUR_WIFI_PASSWORD";
+
+
+// ========================================
+// FASTAPI CONFIGURATION
+// ========================================
+
+const char* serverUrl =
+  "http://172.18.32.94:8000/api/sensors/readings";
+
+const char* deviceId = "ESP32-001";
+const char* ingredient = "rice";
 
 
 // ========================================
@@ -47,7 +59,6 @@ void setup() {
 
   if (!scale.is_ready()) {
     Serial.println("ERROR: HX711 not detected!");
-    Serial.println("Check HX711 wiring.");
   }
 
   scale.set_scale(CALIBRATION_FACTOR);
@@ -73,7 +84,6 @@ void setup() {
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
-
     delay(500);
     Serial.print(".");
   }
@@ -83,6 +93,7 @@ void setup() {
 
   Serial.print("ESP32 IP Address: ");
   Serial.println(WiFi.localIP());
+
 
   Serial.println();
   Serial.println("========================================");
@@ -98,27 +109,35 @@ void setup() {
 void loop() {
 
   // --------------------------------------
-  // Read Weight
+  // Check HX711
   // --------------------------------------
 
-  if (scale.is_ready()) {
-
-    float weightKg = scale.get_units(10);
-
-    // Very small negative values ko zero karo
-    if (weightKg < 0) {
-      weightKg = 0;
-    }
-
-    Serial.print("Weight: ");
-    Serial.print(weightKg, 2);
-    Serial.println(" kg");
-
-  } else {
+  if (!scale.is_ready()) {
 
     Serial.println("ERROR: HX711 not detected!");
-
+    delay(2000);
+    return;
   }
+
+
+  // --------------------------------------
+  // Read Weight in KG
+  // --------------------------------------
+
+  float weightKg = scale.get_units(10);
+
+  // Small negative values ko zero karo
+  if (weightKg < 0) {
+    weightKg = 0;
+  }
+
+
+  Serial.println();
+  Serial.println("----------------------------------------");
+
+  Serial.print("Weight: ");
+  Serial.print(weightKg, 2);
+  Serial.println(" kg");
 
 
   // --------------------------------------
@@ -129,13 +148,78 @@ void loop() {
 
     Serial.println("Wi-Fi: Connected");
 
+
+    // ------------------------------------
+    // Create HTTP Client
+    // ------------------------------------
+
+    HTTPClient http;
+
+    http.begin(serverUrl);
+
+    http.addHeader("Content-Type", "application/json");
+
+
+    // ------------------------------------
+    // Create JSON
+    // ------------------------------------
+
+    String jsonData = "{";
+    jsonData += "\"device_id\":\"";
+    jsonData += deviceId;
+    jsonData += "\",";
+    jsonData += "\"ingredient\":\"";
+    jsonData += ingredient;
+    jsonData += "\",";
+    jsonData += "\"weight\":";
+    jsonData += String(weightKg, 2);
+    jsonData += "}";
+
+
+    Serial.println("Sending data to FastAPI:");
+    Serial.println(jsonData);
+
+
+    // ------------------------------------
+    // Send POST Request
+    // ------------------------------------
+
+    int httpResponseCode = http.POST(jsonData);
+
+
+    // ------------------------------------
+    // Check Response
+    // ------------------------------------
+
+    Serial.print("HTTP Response Code: ");
+    Serial.println(httpResponseCode);
+
+    if (httpResponseCode > 0) {
+
+      String response = http.getString();
+
+      Serial.println("FastAPI Response:");
+      Serial.println(response);
+
+    } else {
+
+      Serial.print("POST failed: ");
+      Serial.println(http.errorToString(httpResponseCode));
+
+    }
+
+
+    http.end();
+
   } else {
 
     Serial.println("Wi-Fi: Disconnected");
 
   }
 
+
   Serial.println("----------------------------------------");
 
-  delay(2000);
+  // Send every 5 seconds
+  delay(5000);
 }
